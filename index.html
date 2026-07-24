@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dRAE: Discrete Representation Autoencoder with Hyper-Spherical Codes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <script>
+    MathJax = { tex: { inlineMath: [['$','$']] }, options: { skipHtmlTags: ['script','noscript','style','textarea'] } };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue: #5934d3;
+      --blue-light: #f5efff;
+      --blue-dark: #681dd8;
+      --purple-dark: #532794;
+      --gray-50: #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-400: #94a3b8;
+      --gray-600: #475569;
+      --gray-800: #1e293b;
+      --gray-900: #0f172a;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-800);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ─────────────────────────────────── */
+    header {
+      background: url('assets/background.png') center center / cover no-repeat;
+      color: #fff;
+      padding: 80px 24px 64px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(10, 20, 40, 0.6) 0%, rgba(20, 10, 50, 0.3) 100%);
+      pointer-events: none;
+    }
+    header h1 {
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: clamp(1.7rem, 4vw, 2.6rem);
+      font-weight: 600;
+      line-height: 1.25;
+      letter-spacing: -0.3px;
+      margin-bottom: 14px;
+      position: relative;
+    }
+    header h1 .accent { color: #c4b5fd; }
+    header .subtitle {
+      font-size: 1.02rem;
+      color: rgba(203, 213, 225, 0.9);
+      margin-bottom: 30px;
+      font-style: italic;
+      position: relative;
+      letter-spacing: 0.2px;
+    }
+    .buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      position: relative;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 22px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
+    .btn-primary { background: rgba(255,255,255,0.08); color: #f1f5f9; border: 1px solid rgba(255,255,255,0.18); backdrop-filter: blur(4px); }
+    .btn-secondary { background: rgba(255,255,255,0.08); color: #f1f5f9; border: 1px solid rgba(255,255,255,0.18); backdrop-filter: blur(4px); }
+
+    /* ── Layout ──────────────────────────────────── */
+    main { max-width: 800px; margin: 0 auto; padding: 56px 24px 72px; }
+    section { margin-bottom: 56px; }
+
+    /* ── Section headings ────────────────────────── */
+    section h2 {
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    section h2::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--gray-200), transparent);
+    }
+
+    section p { margin-bottom: 14px; color: var(--gray-600); font-size: 0.97rem; }
+    section p:last-child { margin-bottom: 0; }
+    section a { color: var(--gray-600); font-weight: 500; text-decoration: none; }
+    section strong { color: var(--blue); font-weight: 900; text-decoration: none; }
+    section a:hover { text-decoration: underline; }
+
+    /* ── Diagnostic tables ───────────────────────── */
+    .diag-tables {
+      display: block;
+      margin-top: 20px;
+    }
+    .diag-table-wrap { overflow-x: auto; }
+    .diag-table-wrap p.tbl-caption {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--gray-400);
+      margin-bottom: 8px;
+    }
+    table.diag {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    table.diag thead tr:last-child {
+      border-bottom: 1px solid var(--gray-200);
+    }
+    table.diag th {
+      text-align: center;
+      padding: 8px 10px;
+      font-weight: 600;
+      color: var(--gray-900);
+      white-space: nowrap;
+    }
+    table.diag th:first-child { text-align: left; }
+    table.diag td {
+      text-align: center;
+      padding: 8px 10px;
+      color: var(--gray-600);
+    }
+    table.diag td:first-child { text-align: left; font-weight: 500; color: var(--gray-800); }
+    table.diag tbody tr:last-child td { border-bottom: 1px solid var(--gray-200); }
+    table.diag th:nth-child(5),
+    table.diag td:nth-child(5) { border-left: 1px solid var(--gray-200); padding-left: 14px; }
+
+    /* ── Observation items ───────────────────────── */
+    .obs-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+    .obs-item {
+      padding: 10px 0 10px 16px;
+      border-left: 2px solid var(--blue);
+    }
+    .obs-icon { display: none; }
+    .obs-item p { margin: 0; font-size: 0.94rem; color: var(--gray-600); }
+
+    /* ── Feature cards ───────────────────────────── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid var(--gray-200);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.08); border-color: var(--gray-400); }
+    .card-label {
+      display: inline-block;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 8px;
+    }
+    .card p { font-size: 0.92rem; color: var(--gray-600); margin: 0; line-height: 1.65; }
+
+    /* ── Code blocks ─────────────────────────────── */
+    pre, code { font-family: 'Menlo', 'Monaco', 'Consolas', monospace; font-size: 0.85rem; }
+    pre {
+      background: var(--gray-900);
+      color: #e2e8f0;
+      padding: 20px 24px;
+      border-radius: 10px;
+      overflow-x: auto;
+      line-height: 1.65;
+      margin-top: 12px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    code { background: var(--gray-100); color: #4338ca; padding: 2px 7px; border-radius: 4px; font-size: 0.85em; }
+    pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+
+    /* ── Algorithm box ───────────────────────────── */
+    .algorithm {
+      margin-top: 24px;
+      border: 1px solid var(--gray-300, #cbd5e1);
+      border-radius: 10px;
+      overflow: hidden;
+      font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+      font-size: 0.875rem;
+      line-height: 1.75;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .algo-header {
+      background: var(--gray-900);
+      color: #e2e8f0;
+      padding: 11px 18px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .algo-io {
+      background: var(--gray-100);
+      padding: 10px 18px 10px 18px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.88rem;
+      color: var(--gray-700, #403751);
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .algo-io strong { color: var(--purple-dark); }
+    .algo-body { padding: 10px 0 12px; background: #fff; }
+    .algo-line {
+      display: flex;
+      align-items: baseline;
+      gap: 0;
+      padding: 1px 18px;
+    }
+    .algo-line:hover { background: var(--gray-50); }
+    .algo-num {
+      min-width: 28px;
+      color: var(--gray-400);
+      font-size: 0.78rem;
+      user-select: none;
+      flex-shrink: 0;
+      text-align: right;
+      padding-right: 14px;
+    }
+    .algo-stmt { flex: 1; color: var(--gray-800); }
+    .algo-comment {
+      color: var(--gray-400);
+      font-style: italic;
+      font-size: 0.82rem;
+      margin-left: 16px;
+      flex-shrink: 0;
+    }
+    .algo-divider { border: none; border-top: 1px solid var(--gray-100); margin: 6px 0; }
+    .algo-footer {
+      background: var(--gray-100);
+      padding: 10px 18px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.88rem;
+      color: var(--gray-700, #374151);
+      border-top: 1px solid var(--gray-200);
+    }
+    .algo-footer strong { color: var(--purple-dark); }
+
+    /* ── Figures ─────────────────────────────────── */
+    figure {
+      margin-top: 24px;
+      text-align: center;
+    }
+    figure img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid var(--gray-200);
+      display: block;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    figcaption {
+      margin-top: 12px;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      font-style: italic;
+      line-height: 1.55;
+    }
+
+    /* ── Footnote ────────────────────────────────── */
+    .footnote {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.8rem;
+      color: var(--gray-400);
+      line-height: 1.6;
+    }
+    .footnote a { color: var(--gray-400); text-decoration: underline dotted; }
+    .footnote a:hover { color: var(--blue); }
+    sup.ref {
+      font-size: 0.7em;
+      color: var(--blue);
+      font-weight: 600;
+      cursor: default;
+    }
+
+    /* ── Ack list ────────────────────────────────── */
+    .ack-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .ack-list li { display: flex; align-items: baseline; gap: 8px; font-size: 0.95rem; color: var(--gray-600); }
+    .ack-list li::before { content: '↗'; color: var(--blue); font-size: 0.8rem; flex-shrink: 0; }
+    .ack-list a { color: var(--blue); text-decoration: none; font-weight: 500; }
+    .ack-list a:hover { text-decoration: underline; }
+
+    /* ── Footer ──────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 32px 24px;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      border-top: 1px solid var(--gray-200);
+      letter-spacing: 0.2px;
+    }
+    footer a { color: var(--gray-400); text-decoration: none; }
+    footer a:hover { color: var(--blue); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1><span class="accent">dRAE</span>: Discrete Representation Autoencoder<br>with Hyper-Spherical Codes</h1>
+  <p class="subtitle">An effective solution for quantizing high-dimensional vectors</p>
+  <div class="buttons">
+    <a class="btn btn-primary" href="https://arxiv.org/abs/2606.xxxxx" target="_blank">&#x1F4C4;&nbsp; Paper</a>
+    <a class="btn btn-secondary" href="https://github.com/martian422/dRAE" target="_blank">&#x1F4BB;&nbsp; Code</a>
+  </div>
+</header>
+
+<main>
+
+  <section>
+    <h2>Abstract</h2>
+    <p>
+      We propose <strong>dRAE</strong>, a visual tokenizer built on
+      <a href="#hsq" style="color:var(--blue);font-weight:900;text-decoration:none;">Hyper-Spherical Quantization (HSQ)</a>. By assigning codes via cosine similarity and
+      updating embeddings in tangent space, HSQ aligns the quantization objective with the intrinsic
+      geometry of pre-trained vision encoder features (<em>e.g.,</em> SigLIP2, DINOv2), achieving
+      exceptionally high codebook utilization and strong semantic alignment.
+    </p>
+    <p>Built upon the <a href="https://github.com/bytetriper/RAE">RAE</a> codebase,
+      dRAE supports end-to-end training with optional encoder distillation and online evaluation of
+      PSNR&thinsp;/&thinsp;SSIM&thinsp;/&thinsp;rFID during training.
+    </p>
+    
+    <figure>
+      <img src="assets/joint_vq_comparison_web.png" alt="Teaser figure placeholder" />
+      <figcaption>Figure 1. An early-bird observation on unified tokenizer training with Qwen-3.5, 
+        with codebook size 131072. The codebook is trained end-to-end using both image reconstruction 
+        and understanding as proxy tasks, allowing supervision to flow through a unified training objective. 
+        Please refer to the paper for full details. </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Observation</h2>
+    <p>
+      In high-dimensional Euclidean space, a standard Gaussian distribution exhibits the
+      <em>thin-shell</em> concentration property: if $z \sim \mathcal{N}(0, I_d)$, its norm
+      $\|z\|_2$ concentrates sharply around $\sqrt{d}$ as $d \to \infty$.
+      Vision encoders such as SigLIP2 are trained with contrastive objectives that
+      encourage features to spread uniformly across directions — a pressure analogous to the
+      isotropic structure of a Gaussian<sup class="ref">[1]</sup>. Related self-supervised approaches like JEPA also yield highly 
+      regular representations<sup class="ref">[2]</sup>, which have been shown to encode density-related structure that can 
+      be exploited with Gaussian models. Their patch embeddings, as suggested by recent studies<sup class="ref">[3,4]</sup>, 
+      similarly concentrate on a thin spherical shell, with meaningful information encoded in
+      both the <em>direction</em> (angular) and the <em>radius</em> (magnitude) of each feature vector.
+    </p>
+    <p>
+      We randomly sample 512 images from ImageNet and encode them with SigLIP2, DINOv2, and DINOv3 to
+      compute the L2 norm of all patch embeddings. As shown in Fig. 2, the statistics clearly demonstrate
+      that most patch embeddings are concentrated on a thin shell rather than densely occupying the
+      Euclidean space, suggesting that high-dimensional visual features have strong angular structure.
+    </p>
+    <figure>
+      <img src="assets/norms_web.png" alt="L2 norm distribution of patch embeddings" />
+      <figcaption>Figure 2. L2 norm distribution of patch embeddings from SigLIP2, DINOv2, and DINOv3 across 512 ImageNet images.</figcaption>
+    </figure>
+    <p> </p>
+    <p>
+      To further investigate the role of each component, we conduct two controlled experiments comparing
+      models trained on raw features <em>Z</em> versus L2-normalized features <em>Z&prime;</em>.
+      For understanding (H1), an MLLM following the LLaVA architecture shows negligible degradation
+      (&lt;1%) across MMBench, TextVQA, and POPE when switching to <em>Z&prime;</em>,
+      confirming that semantic content resides in the <em>direction</em> of features.
+      For reconstruction (H2), a ViT decoder trained on <em>Z&prime;</em> suffers a marked drop
+      (SSIM &minus;0.11, rFID +4.95), confirming that <em>magnitude</em> is essential
+      for structural fidelity.
+    </p>
+    <div class="diag-tables" style="display:block;">
+      <div class="diag-table-wrap">
+        <table class="diag">
+          <thead>
+            <tr>
+              <th></th>
+              <th colspan="3" style="text-align:center; border-bottom: 1px solid var(--gray-300, #cbd5e1);">Visual Understanding</th>
+              <th colspan="3" style="text-align:center; border-bottom: 1px solid var(--gray-300, #cbd5e1);">Image Reconstruction</th>
+            </tr>
+            <tr>
+              <th>Variant</th>
+              <th>MMBench ↑</th><th>TextVQA ↑</th><th>POPE ↑</th>
+              <th>PSNR ↑</th><th>SSIM ↑</th><th>rFID ↓</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Raw <em>Z</em></td><td>82.2</td><td>61.3</td><td>85.2</td><td>22.5</td><td>0.62</td><td>4.62</td></tr>
+            <tr><td>Norm <em>Z&prime;</em></td><td>81.1</td><td>60.7</td><td>84.3</td><td>20.6</td><td>0.51</td><td>9.57</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p> </p>
+    <p>We summarize the two key observations as follows:</p>
+    <div class="obs-list">
+      <div class="obs-item">
+        <p><strong>H1.</strong> Semantic information roughly lies on a hyper-sphere for understanding.</p>
+      </div>
+      <div class="obs-item">
+        <p><strong>H2.</strong> Magnitude is structurally essential for image reconstruction.</p>
+      </div>
+    </div>
+    <p class="footnote">
+      <sup>[1]</sup> Betser et al., <em>InfoNCE Induces Gaussian Distribution</em>, ICLR 2026.<br>
+      <sup>[2]</sup> Balestriero et al., <em>Gaussian Embeddings: How JEPAs Secretly Learn Your Data Density</em>, arXiv 2510.05949.<br>
+      <sup>[3]</sup> Levi &amp; Gilboa, <em>The Double-Ellipsoid Geometry of CLIP</em>, ICML 2025.<br>
+      <sup>[4]</sup> Wang &amp; Isola, <em>Understanding Contrastive Representation Learning through Alignment and Uniformity on the Hypersphere</em>, ICML 2020.
+    </p>
+  </section>
+
+  <section>
+    <h2 id="hsq">Core Design: Hyper-Spherical Quantization</h2>
+    <p>
+      Conventional VQ is designed for low-dimensional VQ-VAEs, usually in $d \in [8,64]$, and 
+      optimizes its codebook using the L2 distance. This biases the Voronoi tessellation toward
+      radial differences rather than angular structure: samples with larger or varying norms
+      disproportionately influence the partition boundaries, irrespective of their directional
+      alignment. We posit that this magnitude-sensitivity is a primary cause of codebook collapse when 
+      quantizing high-dimensional ($d > 512$) semantics.
+    </p>
+    <p> 
+      At the same time, simply discarding the magnitude variance and imposing a unit-sphere prior 
+      on inputs, would deteriorate reconstruction, as this operation is non-uniform across tokens, which will 
+      eventually degrades low-level structural and textural nuances.
+    </p>
+    <p>
+      To mitigate this, we propose <strong>Hyper-Spherical Quantization (HSQ)</strong>, which
+      routes assignments on the hyper-sphere while preserving the full geometry of the output:
+    </p>
+    <div class="card-grid">
+      <div class="card">
+        <span class="card-label">Angular Routing</span>
+        <p>
+          The nearest-neighbor lookup maximizes cosine similarity
+          <code>s&thinsp;=&thinsp;cos(z,&thinsp;c)</code>.
+          Crucially, the input <code>z</code> and output <code>z_q</code> are <strong>never</strong> normalized —
+          only the routing decision is spherical, preserving the full magnitude.
+        </p>
+      </div>
+      <div class="card">
+        <span class="card-label">Cosine Codebook Loss</span>
+        <p>
+          The codebook update uses a cosine loss
+          <code>1&thinsp;&minus;&thinsp;cos(z_q,&thinsp;z.detach())</code>,
+          keeping the gradient signal consistent with the spherical assignment criterion.
+        </p>
+      </div>
+    </div>
+    <div class="algorithm">
+      <div class="algo-header">&nbsp;&mdash;&nbsp; Hyper-Spherical Quantization</div>
+      <div class="algo-io">
+        <strong>Input:</strong> Feature tensor $Z \in \mathbb{R}^{N \times d}$,
+        base codebook $\mathcal{C}$, learnable projection $W$, commitment weight $\beta$
+      </div>
+      <div class="algo-body">
+        <div class="algo-line">
+          <span class="algo-num">1</span>
+          <span class="algo-stmt">$\hat{\mathcal{C}} \leftarrow W\mathcal{C}$</span>
+          <span class="algo-comment">// Project codebook following SimVQ</span>
+        </div>
+        <div class="algo-line">
+          <span class="algo-num">2</span>
+          <span class="algo-stmt">$S_{i,j} \leftarrow \dfrac{Z_i}{\|Z_i\|_2} \cdot \dfrac{\hat{\mathcal{C}}_j}{\|\hat{\mathcal{C}}_j\|_2}$</span>
+          <span class="algo-comment">// Compute cosine similarity</span>
+        </div>
+        <div class="algo-line">
+          <span class="algo-num">3</span>
+          <span class="algo-stmt">$I_i \leftarrow \arg\max_j\, S_{i,j}$</span>
+          <span class="algo-comment">// Angular routing</span>
+        </div>
+        <div class="algo-line">
+          <span class="algo-num">4</span>
+          <span class="algo-stmt">$Z_q \leftarrow \hat{\mathcal{C}}[I]$</span>
+          <span class="algo-comment">// Lookup on projected codebook (un-normalized)</span>
+        </div>
+        <hr class="algo-divider">
+        <div class="algo-line">
+          <span class="algo-num">5</span>
+          <span class="algo-stmt">$\mathcal{L}_\text{codebook} \leftarrow 1 - \mathrm{sg}\!\left[\dfrac{Z}{\|Z\|_2}\right] \cdot \dfrac{Z_q}{\|Z_q\|_2}$</span>
+          <span class="algo-comment">// Angular codebook loss</span>
+        </div>
+        <div class="algo-line">
+          <span class="algo-num">6</span>
+          <span class="algo-stmt">$\mathcal{L}_\text{commit} \leftarrow \|Z - \mathrm{sg}[Z_q]\|_2^2$</span>
+          <span class="algo-comment">// Commitment loss</span>
+        </div>
+        <div class="algo-line">
+          <span class="algo-num">7</span>
+          <span class="algo-stmt">$\mathcal{L}_\text{VQ} \leftarrow \mathcal{L}_\text{codebook} + \beta\,\mathcal{L}_\text{commit}$</span>
+        </div>
+        <hr class="algo-divider">
+        <div class="algo-line">
+          <span class="algo-num">8</span>
+          <span class="algo-stmt">$Z_\text{out} \leftarrow Z + \mathrm{sg}[Z_q - Z]$</span>
+          <span class="algo-comment">// Straight-through estimator</span>
+        </div>
+      </div>
+      <div class="algo-footer"><strong>Return:</strong> $Z_\text{out},\; \mathcal{L}_\text{VQ},\; I$</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>BibTeX</h2>
+    <div style="position:relative;">
+<pre id="bibtex">@article{ma2026dRAE,
+  title   = {dRAE: Representation Autoencoder with Hyper-Spherical Codes},
+  author  = {Ma, Tianren and Long, Lin and Chen, Chuyan and Zhang, Mu and
+             Zhao, Junbo and Zhang, Tong and Ye, Qixiang},
+  year    = {2026},
+  note    = {arXiv:2607.XXXXX}
+}</pre>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('bibtex').textContent).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" style="position:absolute;top:10px;right:10px;padding:5px 12px;font-size:0.78rem;font-weight:500;background:rgba(255,255,255,0.1);color:#94a3b8;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer;transition:color 0.2s;">Copy</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Acknowledgements</h2>
+    <ul class="ack-list">
+      <li><a href="https://github.com/bytetriper/RAE">RAE</a> — initial codebase for representation autoencoders</li>
+      <li><a href="https://github.com/LTH14/JiT">JiT</a> — modern ViT decoder design</li>
+      <li><a href="https://github.com/bytedance/1d-tokenizer">TiTok</a> — perceptual loss design</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  MIT License &nbsp;&middot;&nbsp; <a href="https://github.com/martian422/dRAE">github.com/martian422/dRAE</a>
+</footer>
+
+</body>
+</html>
+
+@article{assranVJEPA2SelfSupervised2025,
+  title = {V-{{JEPA}} 2: {{Self-Supervised Video Models Enable Understanding}}, {{Prediction}} and {{Planning}}},
+  shorttitle = {V-{{JEPA}} 2},
+  author = {Assran, Mido and Bardes, Adrien and Fan, David and Garrido, Quentin and Howes, Russell and Mojtaba and Komeili and Muckley, Matthew and Rizvi, Ammar and Roberts, Claire and Sinha, Koustuv and Zholus, Artem and Arnaud, Sergio and Gejji, Abha and Martin, Ada and Hogan, Francois Robert and Dugas, Daniel and Bojanowski, Piotr and Khalidov, Vasil and Labatut, Patrick and Massa, Francisco and Szafraniec, Marc and Krishnakumar, Kapil and Li, Yong and Ma, Xiaodong and Chandar, Sarath and Meier, Franziska and LeCun, Yann and Rabbat, Michael and Ballas, Nicolas},
+  date = {2025-06-11},
+  eprint = {2506.09985},
+  eprinttype = {arXiv},
+  eprintclass = {cs.AI},
+  url = {http://arxiv.org/abs/2506.09985},
+  urldate = {2026-07-16},
+  pubstate = {prepublished},
+  journal = {arXiv preprint arXiv:2506.09985}
+}
